@@ -27,6 +27,11 @@ mongoose
 
 //ROUTES
 
+// --- HEALTH CHECK ---
+// Uptime Robot will ping this to keep the server awake!
+app.get('/api/ping', (req, res) => {
+  res.status(200).json({ message: 'Server is awake!' });
+});
 // A simple test route
 app.get('/api/test', (req, res) => {
   res.json({ message: 'The backend is alive and talking!' });
@@ -231,12 +236,6 @@ app.delete('/api/shopping/:id', protect, async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: 'Failed to remove item.' });
   }
-});
-
-// --- HEALTH CHECK ---
-// Uptime Robot will ping this to keep the server awake!
-app.get('/api/ping', (req, res) => {
-  res.status(200).json({ message: "Server is awake!" });
 });
 
 // The "Inspire Me" Route
