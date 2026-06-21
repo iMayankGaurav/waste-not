@@ -32,22 +32,11 @@ app.get('/api/test', (req, res) => {
 });
 
 // Add a new grocery item
-app.post('/api/items', protect,  async (req, res) => {
+app.post('/api/items', protect, async (req, res) => {
   try {
-    // TEMPORARY WORKAROUND: Find or create a dummy user until we build Auth
-    let dummyUser = await User.findOne({ email: 'test@wastenot.com' });
-    if (!dummyUser) {
-      dummyUser = await User.create({
-        name: 'Test User',
-        email: 'test@wastenot.com',
-      });
-      console.log('Created temporary dummy user!');
-    }
-
-    // Save the new item with the dummy user's ID attached
     const newItem = await PantryItem.create({
       ...req.body,
-      userId: dummyUser._id,
+      userId: req.user.id,
     });
 
     res.status(201).json(newItem); // Send the saved item back to React
@@ -60,21 +49,11 @@ app.post('/api/items', protect,  async (req, res) => {
 // Get all grocery items
 app.get('/api/items', protect, async (req, res) => {
   try {
-    // 1. Find our temporary dummy user
-    const dummyUser = await User.findOne({ email: 'test@wastenot.com' });
-    if (!dummyUser) {
-      return res.json([]); // If no user exists yet, return an empty list
-    }
-
-    // 2. Find all items belonging to this user, sorted by expiry date (soonest first)
-    // 2. Find all active items belonging to this user
     const items = await PantryItem.find({
-      userId: dummyUser._id,
-      isConsumed: false, // Don't show eaten food
-      isWasted: false, // Don't show wasted food
+      userId: req.user.id, // STRICTLY look at the logged-in user
+      isConsumed: false,
+      isWasted: false,
     }).sort({ expiryDate: 1 });
-
-    // 3. Send the items to the frontend
     res.json(items);
   } catch (error) {
     console.error('Fetch Error:', error);
@@ -105,11 +84,7 @@ app.put('/api/items/:id', async (req, res) => {
 // Get Financial Statistics
 app.get('/api/finances', async (req, res) => {
   try {
-    const dummyUser = await User.findOne({ email: 'test@wastenot.com' });
-    if (!dummyUser) return res.json({ pieData: [], barData: [] });
-
-    // Grab EVERY item this user has ever logged
-    const items = await PantryItem.find({ userId: dummyUser._id });
+    const items = await PantryItem.find({ userId: req.user.id });
 
     let totalEaten = 0;
     let totalWasted = 0;
@@ -156,7 +131,7 @@ app.post('/api/auth/register', async (req, res) => {
     // Check if user already exists
     const existingUser = await User.findOne({ email });
     if (existingUser) {
-      return res.status(400).json({ error: "Email already in use." });
+      return res.status(400).json({ error: 'Email already in use.' });
     }
 
     // Hash the password (scramble it 10 times for security)
@@ -167,16 +142,23 @@ app.post('/api/auth/register', async (req, res) => {
     const newUser = await User.create({
       name,
       email,
-      password: hashedPassword
+      password: hashedPassword,
     });
 
     // Create the JWT (The VIP wristband)
-    const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, {
+      expiresIn: '7d',
+    });
 
-    res.status(201).json({ token, user: { id: newUser._id, name: newUser.name, email: newUser.email } });
+    res
+      .status(201)
+      .json({
+        token,
+        user: { id: newUser._id, name: newUser.name, email: newUser.email },
+      });
   } catch (error) {
-    console.error("Registration Error:", error);
-    res.status(500).json({ error: "Server error during registration." });
+    console.error('Registration Error:', error);
+    res.status(500).json({ error: 'Server error during registration.' });
   }
 });
 
@@ -188,22 +170,27 @@ app.post('/api/auth/login', async (req, res) => {
     // Find the user by email
     const user = await User.findOne({ email });
     if (!user) {
-      return res.status(400).json({ error: "Invalid email or password." });
+      return res.status(400).json({ error: 'Invalid email or password.' });
     }
 
     // Compare the typed password with the scrambled one in the database
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
-      return res.status(400).json({ error: "Invalid email or password." });
+      return res.status(400).json({ error: 'Invalid email or password.' });
     }
 
     // Create the JWT
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+      expiresIn: '7d',
+    });
 
-    res.json({ token, user: { id: user._id, name: user.name, email: user.email } });
+    res.json({
+      token,
+      user: { id: user._id, name: user.name, email: user.email },
+    });
   } catch (error) {
-    console.error("Login Error:", error);
-    res.status(500).json({ error: "Server error during login." });
+    console.error('Login Error:', error);
+    res.status(500).json({ error: 'Server error during login.' });
   }
 });
 
@@ -241,59 +228,56 @@ app.post('/api/inspire', async (req, res) => {
   }
 });
 
-//BACKGROUND TASKS (Cron Jobs)
-cron.schedule('0 8 * * *', async () => {
-  console.log('Running daily expiry check...');
-
-  try {
-    const today = new Date();
-    const twoDaysFromNow = new Date(today);
-    twoDaysFromNow.setDate(today.getDate() + 2);
-
-    const expiringItems = await PantryItem.find({
-      expiryDate: { $lte: twoDaysFromNow },
-      isConsumed: false,
-      isWasted: false,
-    }).populate('userId');
-
-    if (expiringItems.length > 0) {
-      console.log(
-        `Found ${expiringItems.length} items about to expire! Setting up emails...`
-      );
-
-      const transporter = nodemailer.createTransport({
-        host: 'smtp.ethereal.email',
-        port: 587,
-        auth: {
-          user: 'zechariah.harber@ethereal.email',
-          pass: 'H11DHv9uMn5KjvDwNu',
-        },
-      });
-
-      for (const item of expiringItems) {
-        const userEmail = item.userId.email;
-
-        const mailOptions = {
-          from: '"Waste-Not App" <alerts@wastenot.com>',
-          to: userEmail,
-          subject: '⚠️ Grocery Expiry Warning!',
-          text: `Heads up! Your ${item.name} is expiring in 2 days. Don't let it go to waste!`,
-        };
-
-        const info = await transporter.sendMail(mailOptions);
-        console.log(
-          `Email sent for ${item.name}! Preview URL: %s`,
-          nodemailer.getTestMessageUrl(info)
-        );
-      }
-    } else {
-      console.log('No items expiring soon. Pantry is looking good!');
-    }
-  } catch (error) {
-    console.error('Error in cron job:', error);
-  }
+// 1. Configure the Email Sender
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
 });
 
+// 2. The Cron Job
+cron.schedule('0 8 * * *', async () => {
+  console.log('Checking for expiring groceries...');
+
+  try {
+    // Calculate tomorrow's exact date window
+    const tomorrow = new Date();
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    const startOfTomorrow = new Date(tomorrow.setHours(0, 0, 0, 0));
+    const endOfTomorrow = new Date(tomorrow.setHours(23, 59, 59, 999));
+
+    // Get all registered users
+    const users = await User.find();
+
+    for (const user of users) {
+      // Find food strictly for this user that expires tomorrow and hasn't been eaten
+      const expiringItems = await PantryItem.find({
+        userId: user._id,
+        isConsumed: false,
+        isWasted: false,
+        expiryDate: { $gte: startOfTomorrow, $lte: endOfTomorrow },
+      });
+
+      // If they have food expiring, send the warning!
+      if (expiringItems.length > 0) {
+        const itemList = expiringItems.map((item) => item.name).join(', ');
+
+        await transporter.sendMail({
+          from: `"Waste-Not AI" <${process.env.EMAIL_USER}>`,
+          to: user.email,
+          subject: '⚠️ Waste-Not Alert: Groceries Expiring Tomorrow!',
+          text: `Hi ${user.name},\n\nFriendly reminder that the following items are expiring tomorrow:\n\n👉 ${itemList}\n\nTime to ask the Zero-Waste Chef for a recipe!\n\n- The Waste-Not Team`,
+        });
+
+        console.log(`Alert sent successfully to ${user.email}`);
+      }
+    }
+  } catch (error) {
+    console.error('Cron Job Error:', error);
+  }
+});
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
