@@ -10,7 +10,7 @@ export default function Dashboard() {
     const fetchItems = async () => {
       try {
         const token = localStorage.getItem('token'); // Grab token
-        const response = await fetch('http://localhost:5000/api/items', {
+        const response = await fetch(import.meta.env.VITE_API_URL + '/api/items', {
           headers: {
             Authorization: `Bearer ${token}`, // Attach token
           },
@@ -37,7 +37,7 @@ export default function Dashboard() {
 
       const token = localStorage.getItem('token'); // Grab token
 
-      const response = await fetch(`http://localhost:5000/api/items/${id}`, {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/items/${id}`, {
         method: 'PUT',
         headers: {
           'Content-Type': 'application/json',

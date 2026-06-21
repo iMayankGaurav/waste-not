@@ -10,6 +10,7 @@ const User = require('./models/User.js');
 const protect = require('./middleware/auth');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
+const ShoppingItem = require('./models/ShoppingItem');
 
 const app = express();
 app.use(cors());
@@ -62,17 +63,23 @@ app.get('/api/items', protect, async (req, res) => {
 });
 
 // Update an item's status (Ate it or Wasted it)
-app.put('/api/items/:id', async (req, res) => {
+app.put('/api/items/:id', protect, async (req, res) => {
   try {
-    const { id } = req.params; // Grabs the ID from the URL
+    const { id } = req.params;
     const { isConsumed, isWasted } = req.body;
 
-    // Find the item by its ID and update its booleans
-    const updatedItem = await PantryItem.findByIdAndUpdate(
-      id,
+    const updatedItem = await PantryItem.findOneAndUpdate(
+      { _id: id, userId: req.user.id },
       { isConsumed, isWasted },
       { new: true }
     );
+
+    if (isConsumed && updatedItem) {
+      await ShoppingItem.create({
+        name: updatedItem.name,
+        userId: req.user.id,
+      });
+    }
 
     res.json(updatedItem);
   } catch (error) {
@@ -81,8 +88,8 @@ app.put('/api/items/:id', async (req, res) => {
   }
 });
 
-// Get Financial Statistics
-app.get('/api/finances', async (req, res) => {
+// Get Financial Statistics for the logged-in user (PROTECTED)
+app.get('/api/finances', protect, async (req, res) => {
   try {
     const items = await PantryItem.find({ userId: req.user.id });
 
@@ -90,31 +97,23 @@ app.get('/api/finances', async (req, res) => {
     let totalWasted = 0;
     const categorySpend = {};
 
-    // Crunch the numbers using a simple JavaScript loop
     items.forEach((item) => {
-      // 1. Calculate Pie Chart Data (Money Wasted vs Eaten)
       if (item.isConsumed) totalEaten += item.cost;
       if (item.isWasted) totalWasted += item.cost;
-
-      // 2. Calculate Bar Chart Data (Total spent per category)
-      if (!categorySpend[item.category]) {
-        categorySpend[item.category] = 0;
-      }
+      if (!categorySpend[item.category]) categorySpend[item.category] = 0;
       categorySpend[item.category] += item.cost;
     });
 
-    // Format the data exactly how the Recharts library expects it
-    const pieData = [
-      { name: 'Money Eaten', value: totalEaten },
-      { name: 'Money Wasted', value: totalWasted },
-    ];
-
-    const barData = Object.keys(categorySpend).map((key) => ({
-      name: key,
-      total: categorySpend[key],
-    }));
-
-    res.json({ pieData, barData });
+    res.json({
+      pieData: [
+        { name: 'Money Eaten', value: totalEaten },
+        { name: 'Money Wasted', value: totalWasted },
+      ],
+      barData: Object.keys(categorySpend).map((key) => ({
+        name: key,
+        total: categorySpend[key],
+      })),
+    });
   } catch (error) {
     console.error('Finance Error:', error);
     res.status(500).json({ error: 'Failed to calculate finances.' });
@@ -150,12 +149,10 @@ app.post('/api/auth/register', async (req, res) => {
       expiresIn: '7d',
     });
 
-    res
-      .status(201)
-      .json({
-        token,
-        user: { id: newUser._id, name: newUser.name, email: newUser.email },
-      });
+    res.status(201).json({
+      token,
+      user: { id: newUser._id, name: newUser.name, email: newUser.email },
+    });
   } catch (error) {
     console.error('Registration Error:', error);
     res.status(500).json({ error: 'Server error during registration.' });
@@ -192,6 +189,54 @@ app.post('/api/auth/login', async (req, res) => {
     console.error('Login Error:', error);
     res.status(500).json({ error: 'Server error during login.' });
   }
+});
+
+// --- SHOPPING LIST ROUTES ---
+
+// 1. Get user's active shopping list items
+app.get('/api/shopping', protect, async (req, res) => {
+  try {
+    const list = await ShoppingItem.find({
+      userId: req.user.id,
+      isBought: false,
+    });
+    res.json(list);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to fetch shopping list.' });
+  }
+});
+
+// 2. Add an item to the shopping list
+app.post('/api/shopping', protect, async (req, res) => {
+  try {
+    const { name } = req.body;
+    const newItem = await ShoppingItem.create({
+      name,
+      userId: req.user.id,
+    });
+    res.status(201).json(newItem);
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to add to shopping list.' });
+  }
+});
+
+// 3. Delete/Remove an item from the shopping list (When crossed off)
+app.delete('/api/shopping/:id', protect, async (req, res) => {
+  try {
+    await ShoppingItem.findOneAndDelete({
+      _id: req.params.id,
+      userId: req.user.id,
+    });
+    res.json({ message: 'Item removed from shopping list.' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to remove item.' });
+  }
+});
+
+// --- HEALTH CHECK ---
+// Uptime Robot will ping this to keep the server awake!
+app.get('/api/ping', (req, res) => {
+  res.status(200).json({ message: "Server is awake!" });
 });
 
 // The "Inspire Me" Route

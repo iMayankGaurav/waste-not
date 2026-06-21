@@ -11,7 +11,7 @@ export default function Inspire() {
   useEffect(() => {
     const fetchItems = async () => {
       try {
-        const response = await fetch('http://localhost:5000/api/items');
+        const response = await fetch(import.meta.env.VITE_API_URL + '/api/items');
         const data = await response.json();
         setPantryItems(data);
       } catch (error) {
@@ -35,7 +35,7 @@ export default function Inspire() {
       // Create an array of just the item names (e.g., ["Milk", "Spinach", "Chicken"])
       const ingredientNames = pantryItems.map(item => item.name);
 
-      const response = await fetch('http://localhost:5000/api/inspire', {
+      const response = await fetch(import.meta.env.VITE_API_URL + '/api/inspire', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ingredients: ingredientNames })

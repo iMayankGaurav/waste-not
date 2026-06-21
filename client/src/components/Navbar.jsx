@@ -9,6 +9,7 @@ import {
   ChefHat,
   Sun,
   Moon,
+  ShoppingBag,
 } from 'lucide-react';
 
 export default function Navbar() {
@@ -76,6 +77,12 @@ export default function Navbar() {
                 className="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-green-600 dark:hover:text-green-500 transition-colors"
               >
                 <PieChart className="w-5 h-5" /> Finances
+              </Link>
+              <Link
+                to="/shopping"
+                className="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-green-600 dark:hover:text-green-500 transition-colors"
+              >
+                <ShoppingBag className="w-5 h-5" /> Shopping List
               </Link>
               <Link
                 to="/inspire"

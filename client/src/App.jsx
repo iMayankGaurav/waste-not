@@ -6,6 +6,7 @@ import Dashboard from './components/Dashboard';
 import Finances from './components/Finances';
 import Inspire from './components/Inspire';
 import Auth from './components/Auth';
+import ShoppingList from './components/ShoppingList';
 
 // --- TEMPORARY DUMMY PAGES ---
 // const Dashboard = () => <h2 className="text-3xl font-bold dark:text-white">Your Pantry Dashboard</h2>;
@@ -26,6 +27,7 @@ function App() {
           <Routes>
             <Route path="/" element={<Dashboard />} />
             <Route path="/add" element={<AddGrocery />} />
+            <Route path="/shopping" element={<ShoppingList />} />
             <Route path="/finances" element={<Finances />} />
             <Route path="/inspire" element={<Inspire />} />
             <Route path="/auth" element={<Auth />} />

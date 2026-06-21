@@ -23,7 +23,7 @@ export default function Finances() {
     const fetchFinances = async () => {
       try {
         const token = localStorage.getItem('token');
-        const response = await fetch('http://localhost:5000/api/finances', {
+        const response = await fetch(import.meta.env.VITE_API_URL + '/api/finances', {
           headers: {
             Authorization: `Bearer ${token}`, // Show the wristband
           },
