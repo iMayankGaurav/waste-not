@@ -10,12 +10,30 @@ export default function Dashboard() {
     const fetchItems = async () => {
       try {
         const token = localStorage.getItem('token'); // Grab token
-        const response = await fetch(import.meta.env.VITE_API_URL + '/api/items', {
-          headers: {
-            Authorization: `Bearer ${token}`, // Attach token
-          },
-        });
+        const response = await fetch(
+          import.meta.env.VITE_API_URL + '/api/items',
+          {
+            headers: {
+              Authorization: `Bearer ${token}`, // Attach token
+            },
+          }
+        );
+
+        if (response.status === 401) {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          window.location.href = '/auth';
+          return;
+        }
+
         const data = await response.json();
+
+        if (Array.isArray(data)) {
+          setItems(data);
+        } else {
+          setItems([]);
+        }
+
         setItems(data);
         setLoading(false);
       } catch (error) {
@@ -37,14 +55,17 @@ export default function Dashboard() {
 
       const token = localStorage.getItem('token'); // Grab token
 
-      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/items/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-          Authorization: `Bearer ${token}`, // Attach token
-        },
-        body: JSON.stringify(bodyData),
-      });
+      const response = await fetch(
+        `${import.meta.env.VITE_API_URL}/api/items/${id}`,
+        {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`, // Attach token
+          },
+          body: JSON.stringify(bodyData),
+        }
+      );
 
       if (response.ok) {
         setItems(items.filter((item) => item._id !== id));
