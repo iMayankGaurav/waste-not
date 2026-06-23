@@ -7,48 +7,72 @@ export default function Inspire() {
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
-  // Fetch the user's current groceries when the page loads
   useEffect(() => {
     const fetchItems = async () => {
       try {
-        const response = await fetch(import.meta.env.VITE_API_URL + '/api/items');
+        const token = localStorage.getItem('token'); 
+
+        const response = await fetch(
+          import.meta.env.VITE_API_URL + '/api/items',
+          {
+            headers: {
+              Authorization: `Bearer ${token}`, 
+            },
+          }
+        );
+
         const data = await response.json();
-        setPantryItems(data);
+        if (response.ok) {
+          setPantryItems(data);
+        } else {
+          console.error('Backend rejected request:', data);
+          setPantryItems([]);
+        }
       } catch (error) {
-        console.error("Failed to fetch pantry items:", error);
+        console.error('Failed to fetch pantry items:', error);
+        setPantryItems([]);
       }
     };
     fetchItems();
   }, []);
 
   const handleGenerateRecipe = async () => {
-    if (pantryItems.length === 0) {
-      setMessage("Your pantry is empty! Log some groceries first.");
+    const ingredientNames = Array.isArray(pantryItems)
+      ? pantryItems.map((item) => item.name)
+      : [];
+
+    if (ingredientNames.length === 0) {
+      setMessage('Your pantry is empty! Log some groceries first.');
       return;
     }
 
     setLoading(true);
-    setMessage("Brainstorming a recipe with your ingredients...");
+    setMessage('Brainstorming a recipe with your ingredients...');
     setRecipe(null);
 
     try {
-      // Create an array of just the item names (e.g., ["Milk", "Spinach", "Chicken"])
-      const ingredientNames = pantryItems.map(item => item.name);
+      const token = localStorage.getItem('token'); // Retrieve JWT token
 
-      const response = await fetch(import.meta.env.VITE_API_URL + '/api/inspire', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ingredients: ingredientNames })
-      });
+      const response = await fetch(
+        import.meta.env.VITE_API_URL + '/api/inspire',
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`, // Send token to protected AI route
+          },
+          body: JSON.stringify({ ingredients: ingredientNames }),
+        }
+      );
 
-      if (!response.ok) throw new Error("Failed to reach AI");
+      if (!response.ok) throw new Error('Failed to reach AI');
 
       const data = await response.json();
       setRecipe(data);
       setMessage('');
     } catch (error) {
       console.error(error);
-      setMessage("The AI chef hit a snag. Please try again.");
+      setMessage('The AI chef hit a snag. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -56,16 +80,18 @@ export default function Inspire() {
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
-      
       {/* Header Section */}
       <div className="text-center bg-white dark:bg-gray-800 p-8 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm">
         <ChefHat className="w-12 h-12 mx-auto text-amber-500 mb-4" />
-        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Zero-Waste Chef</h2>
+        <h2 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+          Zero-Waste Chef
+        </h2>
         <p className="text-gray-600 dark:text-gray-300 mb-6">
-          Let AI create a custom recipe using the ingredients currently in your digital pantry.
+          Let AI create a custom recipe using the ingredients currently in your
+          digital pantry.
         </p>
-        
-        <button 
+
+        <button
           onClick={handleGenerateRecipe}
           disabled={loading}
           className="bg-amber-500 hover:bg-amber-600 disabled:bg-amber-300 text-white font-semibold py-3 px-6 rounded-lg inline-flex items-center gap-2 transition-colors"
@@ -79,22 +105,27 @@ export default function Inspire() {
             </>
           )}
         </button>
-        
-        {message && <p className="mt-4 text-sm font-medium text-amber-600 dark:text-amber-400">{message}</p>}
+
+        {message && (
+          <p className="mt-4 text-sm font-medium text-amber-600 dark:text-amber-400">
+            {message}
+          </p>
+        )}
       </div>
 
       {/* Recipe Display Section */}
       {recipe && (
         <div className="bg-white dark:bg-gray-800 p-8 rounded-xl border border-gray-200 dark:border-gray-700 shadow-sm animate-in fade-in slide-in-from-bottom-4 duration-500">
-          <h3 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">{recipe.title}</h3>
-          
+          <h3 className="text-3xl font-bold text-gray-900 dark:text-white mb-4">
+            {recipe.title}
+          </h3>
+
           <div className="flex items-center gap-2 text-amber-600 dark:text-amber-400 font-medium mb-8 pb-4 border-b border-gray-100 dark:border-gray-700">
             <Clock className="w-5 h-5" />
             Prep & Cook Time: {recipe.prepTime}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-            
             {/* Ingredients List */}
             <div className="md:col-span-1 bg-gray-50 dark:bg-gray-900 p-6 rounded-xl border border-gray-100 dark:border-gray-800">
               <h4 className="text-lg font-semibold text-gray-900 dark:text-white mb-4 flex items-center gap-2">
@@ -102,8 +133,11 @@ export default function Inspire() {
                 Ingredients
               </h4>
               <ul className="space-y-3">
-                {recipe.ingredientsNeeded.map((ing, index) => (
-                  <li key={index} className="flex items-start gap-2 text-gray-600 dark:text-gray-300 text-sm">
+                {recipe.ingredientsNeeded?.map((ing, index) => (
+                  <li
+                    key={index}
+                    className="flex items-start gap-2 text-gray-600 dark:text-gray-300 text-sm"
+                  >
                     <span className="mt-1 w-1.5 h-1.5 bg-green-500 rounded-full flex-shrink-0"></span>
                     {ing}
                   </li>
@@ -118,7 +152,7 @@ export default function Inspire() {
                 Instructions
               </h4>
               <div className="space-y-4">
-                {recipe.instructions.map((step, index) => (
+                {recipe.instructions?.map((step, index) => (
                   <div key={index} className="flex gap-4">
                     <div className="flex-shrink-0 w-8 h-8 bg-amber-100 dark:bg-amber-900/30 text-amber-600 dark:text-amber-400 rounded-full flex items-center justify-center font-bold text-sm">
                       {index + 1}
@@ -130,7 +164,6 @@ export default function Inspire() {
                 ))}
               </div>
             </div>
-
           </div>
         </div>
       )}
