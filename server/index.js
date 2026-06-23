@@ -268,6 +268,13 @@ app.post('/api/inspire', async (req, res) => {
     res.json(recipeJSON);
   } catch (error) {
     console.error('AI Generation Error:', error);
+
+    if (error.status === 503 || error.message?.includes("high demand")) {
+        return res.status(503).json({ 
+            message: "The AI Chef is currently swamped with orders! Please wait a few seconds and try again." 
+        });
+    }
+    
     res.status(500).json({ error: 'Failed to generate recipe.' });
   }
 });
